@@ -24,6 +24,7 @@
 """
     Panels related to a company
 """
+import itertools
 import logging
 
 from webhelpers import paginate
@@ -35,9 +36,9 @@ from autonomie.models.project import Project
 from autonomie import resources
 
 
-_p1 = aliased(Project)
-_p2 = aliased(Project)
-_p3 = aliased(Project)
+_DEFAULT_DISPLAYED_TASKS = (Invoice, Estimation, CancelInvoice)
+
+_proj_aliases = [aliased(Project) for item in _DEFAULT_DISPLAYED_TASKS]
 
 
 log = logging.getLogger(__name__)
@@ -88,23 +89,30 @@ def _get_tasks_per_page(request):
     return 5
 
 
-def _company_tasks_query(company_id):
+
+
+def _company_tasks_query(company_id, displayed_tasks=_DEFAULT_DISPLAYED_TASKS):
     """
     Build sqlalchemy query to all tasks of a company, in reverse statusDate
     order.
     """
     query = Task.query()
-    query = query.with_polymorphic([Invoice, Estimation, CancelInvoice])
+    query = query.with_polymorphic(displayed_tasks)
     query = query.order_by(desc(Task.statusDate))
 
-    query = query.outerjoin(_p1, Invoice.project)
-    query = query.outerjoin(_p2, Estimation.project)
-    query = query.outerjoin(_p3, CancelInvoice.project)
+    used_proj_aliases = [
+        _proj_aliases[index] for index, item in
+        enumerate(_DEFAULT_DISPLAYED_TASKS)
+        ]
+
+    for proj_alias, task_class in itertools.izip(used_proj_aliases, displayed_tasks):
+        query = query.outerjoin(proj_alias, Invoice.project)
 
     return query.filter(or_(
-                _p1.company_id==company_id,
-                _p2.company_id==company_id,
-                _p3.company_id==company_id
+                    *(
+                        alias.company_id == company_id
+                        for alias in used_proj_aliases
+                    )
                 ))
 
 
@@ -113,6 +121,20 @@ def _get_taskpage_number(request):
         Return the page number the user is asking
     """
     return _get_post_int(request, 'tasks_page_nb', 0)
+
+
+def _get_task_requested_types(request):
+    """
+    By default, user wants all task types.
+    """
+    values = []
+    if request.POST.get('task_show_invoice', True):
+        values.append(Invoice)
+    if request.POST.get('task_show_estimation', True):
+        values.append(Estimation)
+    if request.POST.get('task_show_cancelinvoice', True):
+        values.append(CancelInvoice)
+    return values
 
 
 def recent_tasks_panel(context, request):
@@ -127,7 +149,8 @@ def recent_tasks_panel(context, request):
         # javascript engine for the panel
         resources.task_list_js.need()
 
-    query = _company_tasks_query(context.id)
+    task_types = _get_task_requested_types(request)
+    query = _company_tasks_query(context.id, displayed_tasks=task_types)
     page_nb = _get_taskpage_number(request)
     items_per_page = _get_tasks_per_page(request)
 
