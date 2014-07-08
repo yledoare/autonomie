@@ -25,11 +25,14 @@
 """
     Specific tools for handling widgets
 """
+from collections import OrderedDict
 import cgi
 import logging
 import json
 import colander
 import warnings
+from string import lowercase
+import random
 from datetime import date
 from itertools import izip_longest
 
@@ -46,6 +49,7 @@ from translationstring import TranslationString
 from deform_bootstrap.widget import ChosenSingleWidget
 from pyramid.renderers import render
 
+from autonomie.utils.ascii import gen_random_string
 from autonomie.utils.fileupload import FileTempStore
 from autonomie.models.task import Invoice
 
@@ -53,6 +57,13 @@ from autonomie.models.task import Invoice
 log = logging.getLogger(__name__)
 
 TEMPLATES_PATH = "autonomie:deform_templates/"
+
+
+def random_tag_id(size=15):
+    """
+    Return a random string supposed to be used as tag id
+    """
+    return gen_random_string(size)
 
 
 class DisabledInput(widget.Widget):
@@ -521,15 +532,45 @@ lessc.".format(self.num_cols))
                     try:
                         child = field.children[index]
                     except IndexError:
-                        raise AttributeError(u"The grid items number doesn't \
+                        warnings.warn(u"The grid items number doesn't \
 match the number of children of our mapping widget")
-                    index += 1
+                        break
                     child.width = width
+                    index += 1
                 else:
                     child = VoidWidget(width)
                 child_row.append(child)
-            result.append(child_row)
+            if child_row != []:
+                result.append(child_row)
         return result
+
+
+class AccordionMappingWidget(GridMappingWidget):
+    """
+    Render a mapping as an accordion and places inner fields in a grid
+
+    .. code-block:: python
+
+        class Mapping(colander.MappingSchema):
+            field = colander.SchemaNode(...)
+
+        class Schema(colander.Schema):
+            mymapping = Mapping(title=u'The accordion header',
+                widget = AccordionMappingWidget(grid=GRID)
+                )
+
+    you'll need to set the bootstrap_form_style to 'form-grid'
+
+    Form(schema=Schema(), bootstrap_form_style='form-grid')
+    """
+    template = TEMPLATES_PATH + "accordion_mapping"
+    readonly_template = TEMPLATES_PATH + "accordion_mapping"
+
+    @property
+    def tag_id(self):
+        if not hasattr(self, '_tag_id'):
+            self._tag_id = random_tag_id()
+        return self._tag_id
 
 
 class GridFormWidget(GridMappingWidget):
@@ -562,3 +603,84 @@ class GridFormWidget(GridMappingWidget):
     """
     template = TEMPLATES_PATH + "grid_form"
     readonly_template = TEMPLATES_PATH + "grid_form"
+
+
+class AccordionFormWidget(deform.widget.MappingWidget):
+    """
+    AccordionFormWidget is supposed to be combined with colanderalchemy
+
+    The way it works :
+
+        In your SqlAlchemy models, enter the __colanderalchemy__ key under the
+        info attribute.  All columns of a single model can have a section key.
+        If so, an accordion will contain all columns under the same section key
+
+    Example :
+
+        class Model(DBBASE):
+            coordonnees_emergency_name = Column(
+                String(50),
+                info={
+                    'colanderalchemy':{
+                        'title': u"Contact urgent : Nom",
+                        'section': u'Coordonnées',
+                    }
+                }
+            )
+            coordonnees_emergency_phone = Column(
+                String(14),
+                info={
+                    'colanderalchemy':{
+                        'title': u'Contact urgent : Téléphone',
+                        'section': u'Coordonnées',
+                    }
+                }
+            )
+
+            # STATUT
+            statut_social_status_id = Column(
+                ForeignKey('social_status_option.id'),
+                info={
+                    'colanderalchemy':
+                    {
+                        'title': u"Statut social à l'entrée",
+                        'section': u'Statut',
+                        'widget': get_deferred_select(SocialStatusOption),
+                    }
+                }
+            )
+
+        schema = SQLAlchemySchemaNode(Model)
+        form = Form(schema)
+        form.widget = AccordionMappingWidget()
+    """
+    template = TEMPLATES_PATH + "accordion_form"
+    readonly_template = TEMPLATES_PATH + "accordion_form"
+
+
+    def accordions(self, field):
+        """
+        return the children of the given field sorted
+
+
+        """
+        fixed = []
+        accordions = OrderedDict()
+
+        for child in field.children:
+            section = getattr(child.schema, 'section', '')
+            if not section:
+                fixed.append(child)
+            else:
+                if section not in accordions.keys():
+                    accordions[section] = {
+                        'tag_id': random_tag_id(),
+                        'children':[],
+                        'name': section,
+                        "error": False,
+                    }
+                if child.error:
+                    accordions[section]['error'] = True
+                accordions[section]['children'].append(child)
+
+        return fixed, accordions
