@@ -1,3 +1,4 @@
+pyramid_exclog
 Babel==0.9.6
 Beaker==1.6.4
 Chameleon==2.11

@@ -145,6 +145,8 @@ def main(global_config, **settings):
 
     add_static_views(config, settings)
 
+    config.include('pyramid_exclog')
+
     for module in AUTONOMIE_MODULES:
         config.include(module)
 
