@@ -214,7 +214,9 @@ class CompanyEdit(BaseFormView):
         company = merge_session_with_post(self.request.context, appstruct)
         company = self.dbsession.merge(company)
         self.dbsession.flush()
-        message = u"Votre entreprise a bien été éditée"
+        message = u"Entreprise {0}: modifications enregistrées".format(
+            company.name
+        )
         self.session.flash(message)
         return HTTPFound(self.request.route_path("company", id=company.id))
 

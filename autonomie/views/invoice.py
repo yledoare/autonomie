@@ -185,7 +185,10 @@ class InvoiceEdit(TaskFormView):
             invoice = add_lines_to_invoice(invoice, appstruct)
             invoice = self.dbsession.merge(invoice)
             self.dbsession.flush()
-            self.session.flash(u"La facture a bien été éditée.")
+            self.session.flash(u"Facture {0} : modifications enregistrées.".format((
+                invoice.sequenceNumber
+                )
+            )
         except Forbidden, err:
             self.request.session.flash(err.message, queue='error')
         return HTTPFound(self.request.route_path("project",

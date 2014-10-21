@@ -121,7 +121,7 @@ class PermanentUserAddView(BaseFormView):
         * admins
     """
     title = u"Ajout d'un nouveau compte"
-    validate_msg = u"Le compte a bien été ajouté"
+    validate_msg = u"Le compte '{0}' a bien été ajouté"
     schema = get_user_schema()
 
     def _get_company(self, name, user):
@@ -192,7 +192,7 @@ class PermanentUserAddView(BaseFormView):
         # Here we flush to get an id for the redirect
         self.dbsession.flush()
 
-        self.session.flash(self.validate_msg)
+        self.session.flash(self.validate_msg.format(user_model.login))
         return HTTPFound(self.redirect_url(user_model))
 
 
@@ -200,7 +200,7 @@ class PermanentUserEditView(PermanentUserAddView):
     """
         User edition view
     """
-    validate_msg = u"Le compte a bien été édité"
+    validate_msg = u"Compte utilisateur '{0}' : modifications enregistrées"
     schema = get_user_schema(edit=True)
 
     @reify

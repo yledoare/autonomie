@@ -195,7 +195,9 @@ class CustomerEdit(CustomerAdd):
     """
     Customer edition form
     """
-    validation_msg = u"Le client a été édité avec succès"
+    validation_msg = u"Client {0} : modifications enregistrées".format(
+        self.request.context.name
+    )
 
     @reify
     def title(self):
